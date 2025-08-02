@@ -252,16 +252,15 @@
             const invoiceItemsTypst = invoiceItems
                 .sort((a, b) => new Date(a.Date) - new Date(b.Date))
                 .map((item) => {
-                    const itemTotal = item.Quantity * hourlyRate; // Use hourlyRate from form
+                    const itemTotal = item.Quantity * hourlyRate;
                     total += itemTotal;
-                    // Note: Typst needs backslashes to be escaped for strings
                     const description = item.Description.replaceAll('"', '\\"');
                     return `(date: "${item.Date}", project: "${item.Project}", task: "${item.Task}", description: "${description}", quantity: ${item.Quantity}, hourly_rate: ${hourlyRate.toFixed(2)})`;
                 })
                 .join(",\n  ");
 
 
-            // No GST here
+
             const gst = total * 0.0;
             const periodCovered = `${formData?.period_start ?? '[Start Date]'} - ${formData?.period_end ?? '[End Date]'}`;
 
