@@ -250,6 +250,7 @@
             const invoiceItems = file ? await parseCSV(file) : [];
 
             const invoiceItemsTypst = invoiceItems
+                .sort((a, b) => new Date(a.Date) - new Date(b.Date))
                 .map((item) => {
                     const itemTotal = item.Quantity * hourlyRate; // Use hourlyRate from form
                     total += itemTotal;
@@ -308,12 +309,42 @@
             previewSvg(finalTypstCode);
         };
 
+        const saveFormState = () => {
+            const formData = new FormData(form);
+            const data = {};
+            for (const [key, value] of formData.entries()) {
+                if (key !== 'csv_file') {
+                    data[key] = value;
+                }
+            }
+            localStorage.setItem('invoiceFormState', JSON.stringify(data));
+        };
+
+        const loadFormState = () => {
+            const savedState = localStorage.getItem('invoiceFormState');
+            if (savedState) {
+                const data = JSON.parse(savedState);
+                for (const key in data) {
+                    const input = form.elements.namedItem(key);
+                    if (input) {
+                        input.value = data[key];
+                    }
+                }
+            }
+        };
+
         form.addEventListener("submit", (e) => processForm(e, "export"));
         form.addEventListener("change", (e) => {
             if (e.target.type !== "submit") {
                 previewInvoice();
+                saveFormState();
             }
         });
+
+        document.addEventListener('DOMContentLoaded', () => {
+            loadFormState();
+        });
+
 
         document
             .getElementById("typst")
@@ -327,8 +358,7 @@
                         "https://cdn.jsdelivr.net/npm/@myriaddreamin/typst-ts-renderer/pkg/typst_ts_renderer_bg.wasm",
                 });
 
-                // Initial preview with no data
-                previewSvg(await generateTypstFromData({}));
+                previewInvoice();
             });
     </script>
 </body>
