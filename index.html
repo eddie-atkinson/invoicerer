@@ -201,7 +201,6 @@
                     #text(10pt)[Payment terms:] 14 days
                     `;
 
-        // Exports SVG and puts it into the `contentDiv`
         const previewSvg = (mainContent) => {
             $typst
                 .svg({ mainContent })
@@ -297,9 +296,6 @@
             typstString = typstString.replace("$account_name_placeholder$", formData?.account_name || "[Account Name]");
             typstString = typstString.replace("$bsb_placeholder$", formData?.bsb ?? "[BSB]");
             typstString = typstString.replace("$account_number_placeholder$", formData?.account_number ?? "[Account Number]");
-
-            // This is new - invoice number and period covered are not provided, so I'll create a placeholder for it
-            typstString = typstString.replace('$invoice_number_placeholder$', '[Invoice Number]');
 
             return typstString;
         };
