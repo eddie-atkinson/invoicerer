@@ -27,8 +27,16 @@
               gap: 10px;
               padding: 16px;
             ">
-                    <h3>Invoice Details</h3>
+                    <h3>Your Details</h3>
                     <input type="text" name="author_name" placeholder="Your name" />
+                    <input type="text" name="your_address" placeholder="Your Street Address" />
+                    <input type="text" name="your_city_state_postcode"
+                        placeholder="Your City, Your State, Your Postcode" />
+                    <input type="email" name="your_email" placeholder="Your Email Address" />
+                    <input type="tel" name="your_phone" placeholder="Your Phone Number" />
+                    <input type="text" name="abn" placeholder="ABN" />
+
+                    <h3>Invoice Details</h3>
                     <div style="display: flex; flex-direction: row; gap: 10px;">
                         <div>
                             <label for="period_start">Billing Period Start</label>
@@ -41,7 +49,7 @@
 
                     </div>
                     <input type="number" name="hourly_rate" placeholder="Hourly Rate ($)" />
-                    <input type="text" name="abn" placeholder="ABN" />
+
 
                     <h3>Recipient Details</h3>
                     <input type="text" name="client_name" placeholder="Client Name" />
@@ -58,9 +66,6 @@
 
                     <button id="export" type="submit">
                         Generate and Export to PDF
-                    </button>
-                    <button type="button" onclick="previewInvoice()">
-                        Generate Preview
                     </button>
                 </div>
             </form>
@@ -85,6 +90,10 @@
         const baseTypstTemplate = `
 #let invoice_number = "$invoice_number_placeholder$"
 #let author_name = "$author_name_placeholder$"
+#let your_address = "$your_address_placeholder$"
+#let your_city_state_postcode = "$your_city_state_postcode_placeholder$"
+#let your_email = "$your_email_placeholder$"
+#let your_phone = "$your_phone_placeholder$"
 #let date_of_issuance = "$date_of_issuance_placeholder$"
 #let period_covered = "$period_covered_placeholder$"
 #let abn = "$abn_placeholder$"
@@ -113,11 +122,11 @@
   #block[
     #text(weight: "bold")[From:] \\
     #author_name \\
-    Your Street Address \\
-    Your City, Your State, Your Postcode \\
+    #your_address \\
+    #your_city_state_postcode \\
     ABN: #(abn) \\
-    Your Email Address \\
-    Your Phone Number \\
+    #your_email \\
+    #your_phone \\
   ]
   
   #block[
@@ -217,19 +226,19 @@
                 });
         };
 
-        const parseCSV = async (file) => {
-            const result = await Papa.parse(file, {
-                header: true,
-                skipEmptyLines: true,
-                complete: function (results) {
-                    return results.data
-                },
-                error: function (err) {
-                    throw new Error(`Error parsing CSV: ${err}`);
-                },
+        const parseCSV = (file) => {
+            return new Promise((resolve, reject) => {
+                Papa.parse(file, {
+                    header: true,
+                    skipEmptyLines: true,
+                    complete: function (results) {
+                        resolve(results.data);
+                    },
+                    error: function (err) {
+                        reject(new Error(`Error parsing CSV: ${err}`));
+                    },
+                });
             });
-
-            return result.data;
         };
 
         const generateTypstFromData = async (formData) => {
@@ -237,84 +246,60 @@
             let total = 0;
             const hourlyRate = Number(formData.hourly_rate) ?? 0.0
 
+            const file = csvFile.files?.[0] ?? null;
+            const invoiceItems = file ? await parseCSV(file) : [];
 
-            const invoiceItems = (await processCSV()) ?? [];
             const invoiceItemsTypst = invoiceItems
                 .map((item) => {
-                    const itemTotal = item.quantity * item.hourly_rate;
+                    const itemTotal = item.Quantity * hourlyRate; // Use hourlyRate from form
                     total += itemTotal;
-                    return `(id: "${item.ID}", : "${item.Date}", employee: "${item.Employee}", project: "${item.Project}", task: "${item.Task}", description: "${item.Description.replaceAll('"', '\\"')}", quantity: ${item.Quantity}, hourly_rate: "${hourlyRate}")`;
+                    // Note: Typst needs backslashes to be escaped for strings
+                    const description = item.Description.replaceAll('"', '\\"');
+                    return `(date: "${item.Date}", project: "${item.Project}", task: "${item.Task}", description: "${description}", quantity: ${item.Quantity}, hourly_rate: ${hourlyRate.toFixed(2)})`;
                 })
                 .join(",\n  ");
 
 
             // No GST here
             const gst = total * 0.0;
+            const periodCovered = `${formData?.period_start ?? '[Start Date]'} - ${formData?.period_end ?? '[End Date]'}`;
 
             typstString = typstString.replace(
                 "$invoice_items_placeholder$",
                 invoiceItemsTypst || ""
             );
-            typstString = typstString.replace(
-                "$author_name_placeholder$",
-                formData.author_name || ""
-            );
-            typstString = typstString.replace(
-                "$total_placeholder$",
-                total.toFixed(2)
-            );
+            typstString = typstString.replace("$author_name_placeholder$", formData.author_name || "");
+            typstString = typstString.replace("$your_address_placeholder$", formData.your_address || "Your Street Address");
+            typstString = typstString.replace("$your_city_state_postcode_placeholder$", formData.your_city_state_postcode || "Your City, Your State, Your Postcode");
+            typstString = typstString.replace("$your_email_placeholder$", formData.your_email || "Your Email Address");
+            typstString = typstString.replace("$your_phone_placeholder$", formData.your_phone || "Your Phone Number");
+            typstString = typstString.replace("$total_placeholder$", total.toFixed(2));
             typstString = typstString.replace("$gst_placeholder$", gst.toFixed(2));
             typstString = typstString.replace("$date_of_issuance_placeholder$", new Date().toISOString().slice(0, 10));
-            typstString = typstString.replace(
-                "$period_covered_placeholder$",
-                `${formData?.period_start?.slice(0, 10)}-${formData?.period_end?.slice(0, 10)}`
-            );
-            typstString = typstString.replace(
-                "$abn_placeholder$",
-                formData?.abn || "[ABN]"
-            );
-            typstString = typstString.replace(
-                "$client_name_placeholder$",
-                formData?.client_name || "[Client Name]"
-            );
-            typstString = typstString.replace(
-                "$client_address_placeholder$",
-                formData?.client_address || "[Client Address]"
-            );
-            typstString = typstString.replace(
-                "$bank_name_placeholder$",
-                formData?.bank_name || "[Bank Name]"
-            );
-            typstString = typstString.replace(
-                "$account_name_placeholder$",
-                formData?.account_name || "[Account Name]"
-            );
-            typstString = typstString.replace(
-                "$bsb_placeholder$",
-                formData?.bsb ?? "[BSB]"
-            );
-            typstString = typstString.replace(
-                "$account_number_placeholder$",
-                formData?.account_number ?? "[Account Number]"
-            );
+            typstString = typstString.replace("$period_covered_placeholder$", periodCovered);
+            typstString = typstString.replace("$abn_placeholder$", formData?.abn || "[ABN]");
+            typstString = typstString.replace("$client_name_placeholder$", formData?.client_name || "[Client Name]");
+            typstString = typstString.replace("$client_address_placeholder$", formData?.client_address || "[Client Address]");
+            typstString = typstString.replace("$bank_name_placeholder$", formData?.bank_name || "[Bank Name]");
+            typstString = typstString.replace("$account_name_placeholder$", formData?.account_name || "[Account Name]");
+            typstString = typstString.replace("$bsb_placeholder$", formData?.bsb ?? "[BSB]");
+            typstString = typstString.replace("$account_number_placeholder$", formData?.account_number ?? "[Account Number]");
+
+            // This is new - invoice number and period covered are not provided, so I'll create a placeholder for it
+            typstString = typstString.replace('$invoice_number_placeholder$', '[Invoice Number]');
 
             return typstString;
         };
 
-        const processCSV = async () => {
-            const file = csvFile.files?.[0] ?? null;
-            if (file) {
-                const text = await file.text();
-                const result = await parseCSV(text);
-                return result
-            }
-            return [];
-        };
         const processForm = async (e, action) => {
             e.preventDefault();
             const formData = Object.fromEntries(new FormData(e.target));
             const finalTypstCode = await generateTypstFromData(formData);
-            exportPdf(finalTypstCode);
+            if (action === 'export') {
+                exportPdf(finalTypstCode);
+            } else {
+                previewSvg(finalTypstCode);
+            }
         };
 
         const previewInvoice = async () => {
@@ -325,7 +310,7 @@
 
         form.addEventListener("submit", (e) => processForm(e, "export"));
         form.addEventListener("change", (e) => {
-            if (e.target.tagName !== "BUTTON" && e.target.type !== "submit") {
+            if (e.target.type !== "submit") {
                 previewInvoice();
             }
         });
